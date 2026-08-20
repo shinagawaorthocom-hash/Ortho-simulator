@@ -176,6 +176,14 @@
     letter-spacing:-.01em;
   }
   .monthly small{font-size:13px; font-weight:500; opacity:.8;}
+  .total-line{
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:16px;
+    margin:2px 0 12px;
+    color:#F5EEE2;
+  }
+  .result-label.spaced{margin-top:8px;}
   .method-chip{
     display:inline-block;
     margin-top:6px;
@@ -218,9 +226,14 @@
   .breakdown-plan-title{
     font-weight:700; font-size:13px; color:var(--ink);
     margin-bottom:10px;
-    display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+    min-height:40px;
+    line-height:1.4;
   }
-  .breakdown-plan-title .sub{font-weight:500; font-size:11.5px; color:var(--ink-soft);}
+  .breakdown-plan-title .sub{
+    display:block;
+    margin-top:3px;
+    font-weight:500; font-size:11.5px; color:var(--ink-soft);
+  }
   .breakdown-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   @media (max-width:480px){ .breakdown-cols{grid-template-columns:1fr;} }
   .breakdown-col{width:100%;}
@@ -391,7 +404,7 @@
             <span class="price">−¥55,000（検査時−¥22,000／契約時−¥33,000）</span>
           </button>
           <button class="opt discount" data-price="22000" data-exam="0" data-contract="22000" data-cash-only="true" id="discountB">
-            <span class="name">特典B<span class="badge">現金一括で自動適用</span></span>
+            <span class="name">特典B<span class="badge">一括払いで自動適用</span></span>
             <span class="price">−¥22,000（契約時）</span>
           </button>
           <button class="opt discount" data-price="55000" data-exam="0" data-contract="55000" id="discountC">
@@ -405,7 +418,7 @@
         <h3>支払い方法</h3>
         <div class="option-grid" id="methodOptions">
           <button class="opt method active" data-method="cash" data-rate="0" data-count="1">
-            <span class="name">現金一括</span>
+            <span class="name">一括払い</span>
             <span class="price">金利なし・1回払い</span>
           </button>
           <button class="opt method" data-method="inhouse" data-rate="0" data-count="12">
@@ -456,7 +469,10 @@
           ・ご契約<span id="conditionContractAmount">−¥33,000</span>：診断日より1週間以内にご契約いただいた場合（契約時のお支払いから減額）
         </p>
         <p class="lead" id="conditionLineB" style="display:none; margin-top:6px; margin-bottom:0;">
-          ・一括払い−¥22,000：現金一括でお支払いの場合に自動適用（契約時のお支払いから減額）
+          ・一括払い−¥22,000：契約時、一括払いして頂いた場合（契約時のお支払いから減額）
+        </p>
+        <p class="lead" style="margin-top:6px; margin-bottom:0;">
+          ・部分矯正は特典の対象外です。
         </p>
       </div>
 
@@ -506,6 +522,13 @@
   const partialPlanInputWrap = document.getElementById('partialPlanInputWrap');
   const partialPlanInput = document.getElementById('partialPlanInput');
 
+  // プラン選択ボタンの並び順（ラビアル→ハーフリンガル→リンガル→アライナー→部分矯正）を基準に、
+  // 選択した順序に関わらず結果カード・内訳表を常にこの順序で表示する。
+  const planOrder = Array.from(planButtons).map(b => b.dataset.key);
+  function sortedPlans(){
+    return [...state.plans].sort((a, b) => planOrder.indexOf(a.key) - planOrder.indexOf(b.key));
+  }
+
   planButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.key;
@@ -531,6 +554,7 @@
           partialPlanInput.focus();
         }
       }
+      syncCashOnlyDiscounts();
       render();
     });
   });
@@ -601,9 +625,24 @@
 
   function syncCashOnlyDiscounts(){
     const isCash = state.method === 'cash';
-    document.querySelectorAll('#discountOptions .opt[data-cash-only="true"]').forEach(btn => {
-      btn.classList.toggle('disabled', !isCash);
+    const partialOnly = state.plans.length > 0 && state.plans.every(p => p.key === 'partial');
+
+    document.querySelectorAll('#discountOptions .opt').forEach(btn => {
+      if(partialOnly){
+        btn.classList.remove('active');
+        btn.classList.add('disabled');
+      } else if(btn.dataset.cashOnly === 'true'){
+        btn.classList.toggle('disabled', !isCash);
+      } else {
+        btn.classList.remove('disabled');
+      }
     });
+
+    if(partialOnly){
+      applyDiscountTotals();
+      return;
+    }
+
     if(isCash){
       // auto-apply 特典B when switching to cash
       if(!discountB.classList.contains('active')){
@@ -636,7 +675,13 @@
       btn.classList.add('active');
       state.method = btn.dataset.method;
       state.rate = Number(btn.dataset.rate);
-      state.count = Number(btn.dataset.count);
+      if(state.method === 'inhouse'){
+        // 12回/24回トグルの現在の選択状態を維持する（表示と内部stateの食い違いを防ぐ）
+        const activeCountBtn = document.querySelector('#countBlock .opt.active');
+        state.count = Number(activeCountBtn ? activeCountBtn.dataset.count : btn.dataset.count);
+      } else {
+        state.count = Number(btn.dataset.count);
+      }
       countBlock.style.display = state.method === 'inhouse' ? 'block' : 'none';
       methodTimingNote.textContent = timingNotes[state.method];
 
@@ -714,7 +759,7 @@
   }
 
   const methodLabels = {
-    cash: n => '現金一括・1回払い',
+    cash: n => '一括払い・1回払い',
     inhouse: n => `院内分割・${n}回払い`,
     'loan-suruga': n => `デンタルローン（スルガ銀行）・${n}回払い`,
     'loan-epos': n => `デンタルローン（エポスカード）・${n}回払い`
@@ -742,7 +787,7 @@
     }
     card.style.display = 'block';
 
-    body.innerHTML = state.plans.map(plan => {
+    body.innerHTML = sortedPlans().map(plan => {
       const c = computePlan(plan);
       const list = buildInstallments(c.contractInc, state.count);
       const rows = list.map((item, idx) =>
@@ -765,15 +810,22 @@
   const resultCards = document.getElementById('resultCards');
 
   function render(){
-    resultCards.innerHTML = state.plans.map(plan => {
+    resultCards.innerHTML = sortedPlans().map(plan => {
       const c = computePlan(plan);
       return `
         <div class="result-card">
           <div class="plan-title">
             <span>${plan.label}</span>
           </div>
-          <div class="result-label">月々のお支払い目安</div>
+          ${state.method === 'cash' ? `
+          <div class="result-label">総額</div>
+          <div class="monthly">${yen(c.grand)}</div>
+          ` : `
+          <div class="result-label">総額</div>
+          <div class="total-line">${yen(c.grand)}</div>
+          <div class="result-label spaced">月々のお支払い目安</div>
           <div class="monthly">${yen(c.m)}<small> /月</small></div>
+          `}
           <span class="method-chip">${methodLabels[state.method](c.n)}</span>
 
           <div class="divider"></div>
@@ -882,31 +934,51 @@
     pdf.text(`${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`, PAGE_W - MARGIN, MARGIN + 4, { align: 'right' });
     pdf.setTextColor(0, 0, 0);
 
-    // 結果カード（最大3列で行ごとに配置）
+    // 結果カード（3枚以下なら全体の枚数に合わせて幅いっぱいに、4枚以上なら常に3列で配置）
     const cardEls = Array.from(document.querySelectorAll('#resultCards .result-card'));
+    const cardCols = cardEls.length <= 3 ? cardEls.length : 3;
     for(const row of chunk(cardEls, 3)){
-      await captureRow(row, 3);
+      await captureRow(row, cardCols);
     }
 
-    // 特典の適用条件（特典A選択時のみ表示）
+    // 特典の適用条件・院内分割の内訳
     const discountNote = document.getElementById('discountConditionNote');
-    if(discountNote && discountNote.style.display !== 'none'){
+    const hasDiscountNote = discountNote && discountNote.style.display !== 'none';
+    const breakdownCard = document.getElementById('inhouseBreakdownCard');
+    const hasBreakdown = breakdownCard && breakdownCard.style.display !== 'none';
+    // カードが3枚以下（1行に収まる）なら1ページ目に十分な余白があるため、
+    // 特典ノートはそのままカードの下に自然に配置する。
+    // 4枚以上（2行になる）でカード群がページを占有する場合のみ、
+    // 特典ノートを内訳セクションと同じ新ページにまとめて、単独でページに浮くのを防ぐ。
+    const noteFitsOnFirstPage = cardEls.length <= 3;
+
+    if(hasDiscountNote && noteFitsOnFirstPage){
       await captureRow([discountNote], 1);
     }
 
-    // 院内分割 回ごとのお支払い内訳
-    const breakdownCard = document.getElementById('inhouseBreakdownCard');
-    if(breakdownCard && breakdownCard.style.display !== 'none'){
+    if(hasBreakdown){
+      if(!isFirstPage || cursorY > MARGIN){
+        pdf.addPage();
+        cursorY = MARGIN;
+      }
+      isFirstPage = false;
+
+      if(hasDiscountNote && !noteFitsOnFirstPage) await captureRow([discountNote], 1);
+
       const heading = breakdownCard.querySelector('h2');
       const lead = breakdownCard.querySelector('.lead');
       if(heading) await captureRow([heading], 1);
       if(lead) await captureRow([lead], 1);
 
       const planEls = Array.from(document.querySelectorAll('#inhouseBreakdownBody .breakdown-plan'));
+      const planCols = planEls.length <= 3 ? planEls.length : 3;
       for(const row of chunk(planEls, 3)){
-        await captureRow(row, 3);
+        await captureRow(row, planCols);
       }
+    } else if(hasDiscountNote && !noteFitsOnFirstPage){
+      await captureRow([discountNote], 1);
     }
+
 
     pdf.save('矯正費用シミュレーション.pdf');
   }
