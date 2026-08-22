@@ -8,15 +8,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg: #F3ECDF;
+    --bg: #F6F3EC;
     --panel: #FFFFFF;
-    --ink: #2A2119;
-    --ink-soft: #6B5D4F;
-    --line: #E4D9C6;
+    --ink: #2B2621;
+    --ink-soft: #7A6F60;
+    --line: #E6E0D2;
     --teal: #3E2B1E;
     --teal-deep: #241811;
     --gold: #A8824F;
-    --coral: #A2543A;
+    --coral: #9C6B4E;
     --mono: 'IBM Plex Mono', monospace;
     --sans: 'Zen Kaku Gothic New', sans-serif;
     --serif: 'Zen Old Mincho', serif;
@@ -27,11 +27,30 @@
     font-family: var(--sans);
     background: var(--bg);
     color: var(--ink);
-    background-image:
-      radial-gradient(circle at 100% 0%, rgba(62,43,30,0.05), transparent 45%),
-      radial-gradient(circle at 0% 100%, rgba(168,130,79,0.10), transparent 40%);
   }
   .wrap{max-width:1280px;margin:0 auto;padding:28px 20px 60px;}
+
+  .clinic-logo{
+    display:flex; flex-direction:column; align-items:flex-start;
+    margin-bottom:22px; padding-bottom:20px;
+    border-bottom:1px solid var(--line);
+  }
+  .clinic-logo .jp{
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:.08em;
+    color:var(--ink);
+    line-height:1.2;
+  }
+  .clinic-logo .en{
+    font-family:var(--serif);
+    font-size:10.5px;
+    letter-spacing:.32em;
+    color:var(--ink-soft);
+    margin-top:6px;
+    text-transform:uppercase;
+  }
 
   header{margin-bottom:26px;}
   .eyebrow{
@@ -64,7 +83,7 @@
   .card{
     background:var(--panel);
     border:1px solid var(--line);
-    border-radius:16px;
+    border-radius:14px;
     padding:24px;
     margin-bottom:18px;
   }
@@ -141,17 +160,20 @@
     margin-bottom:18px;
   }
   .result-card{
-    background: linear-gradient(165deg, var(--teal-deep), var(--teal));
-    color:#F5EEE2;
-    border-radius:16px;
+    background: #FFFFFF;
+    color: var(--ink);
+    border:1px solid var(--line);
+    border-top:3px solid var(--gold);
+    border-radius:14px;
     padding:20px 20px;
     min-width:0;
+    box-shadow: 0 6px 18px rgba(43,38,33,0.06);
   }
   .result-card .plan-title{
     font-family:var(--mono);
     font-size:11.5px;
     letter-spacing:.04em;
-    color:#D8C3A0;
+    color:var(--ink-soft);
     text-transform:uppercase;
     display:flex; justify-content:space-between; align-items:center;
   }
@@ -165,7 +187,7 @@
     font-size:10.5px;
     letter-spacing:.08em;
     text-transform:uppercase;
-    color:#D8C3A0;
+    color:var(--ink-soft);
   }
   .monthly{
     font-family:var(--mono);
@@ -174,6 +196,7 @@
     line-height:1.1;
     margin:6px 0 2px;
     letter-spacing:-.01em;
+    color:var(--gold);
   }
   .monthly small{font-size:13px; font-weight:500; opacity:.8;}
   .total-line{
@@ -181,27 +204,29 @@
     font-weight:600;
     font-size:16px;
     margin:2px 0 12px;
-    color:#F5EEE2;
+    color:var(--teal-deep);
   }
   .result-label.spaced{margin-top:8px;}
   .method-chip{
     display:inline-block;
     margin-top:6px;
     font-size:10.5px;
-    background:rgba(255,255,255,0.14);
+    background:var(--bg);
+    border:1px solid var(--line);
+    color:var(--ink-soft);
     padding:4px 9px;
     border-radius:999px;
   }
 
-  .divider{height:1px; background:rgba(255,255,255,0.18); margin:14px 0;}
+  .divider{height:1px; background:var(--line); margin:14px 0;}
 
-  .breakdown-title{font-size:10px; letter-spacing:.08em; color:#D8C3A0; text-transform:uppercase; margin-bottom:8px;}
+  .breakdown-title{font-size:10px; letter-spacing:.08em; color:var(--ink-soft); text-transform:uppercase; margin-bottom:8px;}
   .stat-row{display:flex; justify-content:space-between; align-items:center; padding:5px 0; font-size:11.5px; gap:8px;}
-  .stat-row + .stat-row{border-top:1px solid rgba(255,255,255,0.1);}
-  .stat-row .k{color:#DCCEB8;}
-  .stat-row .v{font-family:var(--mono); font-weight:600; text-align:right; white-space:nowrap;}
-  .stat-row .v.warn{color:#E8B98C;}
-  .stat-row.discount .v{color:#E4A98F;}
+  .stat-row + .stat-row{border-top:1px solid var(--line);}
+  .stat-row .k{color:var(--ink-soft);}
+  .stat-row .v{font-family:var(--mono); font-weight:600; text-align:right; white-space:nowrap; color:var(--ink);}
+  .stat-row .v.warn{color:var(--coral);}
+  .stat-row.discount .v{color:var(--coral);}
 
   .install-card{
     background:var(--panel);
@@ -267,22 +292,10 @@
     .wrap{ max-width:100%; padding:0; }
     .grid{ display:block; }
 
-    /* 結果カード：背景をダークグリーンから白に変更するため、文字色をすべて明示的に上書きする */
+    /* 結果カードはすでに明るい配色のため、印刷時は改ページで途中で切れないようにするだけでよい */
     .result-card{
-      background:#fff !important;
-      border:1.5px solid var(--line);
       break-inside:avoid;
     }
-    .result-card *{ color:var(--ink) !important; }
-    .result-card .result-label,
-    .result-card .plan-title,
-    .result-card .breakdown-title,
-    .result-card .stat-row .k,
-    .result-card .method-chip{ color:var(--ink-soft) !important; }
-    .method-chip{ background:var(--bg) !important; border:1px solid var(--line); }
-    .divider{ background:var(--line) !important; }
-    .stat-row.discount .v{ color:var(--coral) !important; }
-    .stat-row .v.warn{ color:var(--coral) !important; }
 
     /* 結果カードは画面表示と同じく横並びに詰めて印刷する。
        grid の auto-fit はブラウザの印刷エンジンによって列数の解決が不安定なため、
@@ -319,6 +332,11 @@
 <body>
 <div class="wrap">
 
+  <div class="clinic-logo">
+    <div class="jp">品川矯正歯科</div>
+    <div class="en">Shinagawa Orthodontic Clinic</div>
+  </div>
+
   <header>
     <div class="eyebrow">Orthodontic Payment Simulator</div>
     <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap;">
@@ -328,7 +346,7 @@
       </div>
       <div class="no-print" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
         <button id="pdfButton" type="button"
-          style="flex-shrink:0; display:flex; align-items:center; gap:8px; background:var(--teal-deep); color:#fff; border:none; border-radius:10px; padding:11px 18px; font-family:var(--sans); font-weight:700; font-size:13.5px; cursor:pointer;">
+          style="flex-shrink:0; display:flex; align-items:center; gap:8px; background:var(--teal-deep); color:#fff; border:none; border-radius:999px; padding:12px 22px; font-family:var(--sans); font-weight:700; font-size:13.5px; cursor:pointer;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h9l5 5v4"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><path d="M6 14v8h12v-8"/></svg>
           PDFで保存
         </button>
