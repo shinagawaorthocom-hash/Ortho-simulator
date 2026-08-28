@@ -379,14 +379,31 @@
             <span class="name">リンガル（裏側矯正）</span>
             <span class="price">¥1,430,000（税込）</span>
           </button>
-          <button class="opt plan" data-price="990000" data-key="aligner">
+          <button class="opt plan" data-key="aligner" id="alignerPlanBtn">
             <span class="name">アライナー（マウスピース）</span>
-            <span class="price">¥990,000（税込）</span>
+            <span class="price">パッケージを選択（複数選択可）</span>
           </button>
           <button class="opt plan" data-price="0" data-key="partial" id="partialPlanBtn">
             <span class="name">部分矯正</span>
             <span class="price">価格を入力して追加（特典対象外）</span>
           </button>
+        </div>
+        <div id="alignerPackageWrap" style="display:none; margin-top:12px;">
+          <label style="display:block; font-size:12px; color:var(--ink-soft); margin-bottom:6px;">アライナーのパッケージを選択（複数選択可・比較表示）</label>
+          <div class="option-grid" id="alignerPackageOptions">
+            <button class="opt pkg" data-pkg="comprehensive">
+              <span class="name">コンプリヘンシブパッケージ</span>
+              <span class="price">¥990,000（税込）</span>
+            </button>
+            <button class="opt pkg" data-pkg="moderate">
+              <span class="name">モデレートパッケージ</span>
+              <span class="price">¥770,000（税込）</span>
+            </button>
+            <button class="opt pkg" data-pkg="light">
+              <span class="name">ライトパッケージ</span>
+              <span class="price">¥550,000（税込）</span>
+            </button>
+          </div>
         </div>
         <div id="partialPlanInputWrap" style="display:none; margin-top:12px;">
           <label style="display:block; font-size:12px; color:var(--ink-soft); margin-bottom:6px;">部分矯正の金額（税込・円）</label>
@@ -539,15 +556,51 @@
   const planButtons = document.querySelectorAll('#planOptions .opt');
   const partialPlanInputWrap = document.getElementById('partialPlanInputWrap');
   const partialPlanInput = document.getElementById('partialPlanInput');
+  const alignerPackageWrap = document.getElementById('alignerPackageWrap');
+  const alignerPackageButtons = document.querySelectorAll('#alignerPackageOptions .opt');
 
-  // プラン選択ボタンの並び順（ラビアル→ハーフリンガル→リンガル→アライナー→部分矯正）を基準に、
+  const ALIGNER_PACKAGES = {
+    comprehensive: {
+      label: 'コンプリヘンシブパッケージ',
+      price: 990000,
+      note: 'マウスピース枚数無制限・5年間（追加費用なし）'
+    },
+    moderate: {
+      label: 'モデレートパッケージ',
+      price: 770000,
+      note: 'マウスピース26枚以内・2年間（追加アライナー2回まで無料、以降は追加ごとに¥55,000）'
+    },
+    light: {
+      label: 'ライトパッケージ',
+      price: 550000,
+      note: 'マウスピース14枚以内・1年間（追加アライナー1回まで無料、以降は追加ごとに¥55,000）'
+    }
+  };
+
+  function activeAlignerPackageKey(){
+    const activeBtn = document.querySelector('#alignerPackageOptions .opt.active');
+    return activeBtn ? activeBtn.dataset.pkg : 'comprehensive';
+  }
+
+  // プランの並び順（ラビアル→ハーフリンガル→リンガル→アライナー各パッケージ→部分矯正）を固定し、
   // 選択した順序に関わらず結果カード・内訳表を常にこの順序で表示する。
-  const planOrder = Array.from(planButtons).map(b => b.dataset.key);
+  const planOrder = ['labial', 'half-lingual', 'lingual', 'aligner-comprehensive', 'aligner-moderate', 'aligner-light', 'partial'];
   function sortedPlans(){
     return [...state.plans].sort((a, b) => planOrder.indexOf(a.key) - planOrder.indexOf(b.key));
   }
 
+  const alignerPlanBtn = document.getElementById('alignerPlanBtn');
+
+  function alignerPlanKeys(){
+    return state.plans.filter(p => p.key.startsWith('aligner-')).map(p => p.key);
+  }
+
+  function syncAlignerMainButtonState(){
+    alignerPlanBtn.classList.toggle('active', alignerPlanKeys().length > 0);
+  }
+
   planButtons.forEach(btn => {
+    if(btn.dataset.key === 'aligner') return; // アライナーはパッケージ側で個別に扱う
     btn.addEventListener('click', () => {
       const key = btn.dataset.key;
       const isActive = btn.classList.contains('active');
@@ -558,14 +611,15 @@
         btn.classList.remove('active');
         if(key === 'partial') partialPlanInputWrap.style.display = 'none';
       } else {
-        const price = key === 'partial'
-          ? Math.max(0, Number(partialPlanInput.value) || 0)
-          : Number(btn.dataset.price);
-        state.plans.push({
-          price: price,
-          key: key,
-          label: btn.querySelector('.name').textContent
-        });
+        let price, label;
+        if(key === 'partial'){
+          price = Math.max(0, Number(partialPlanInput.value) || 0);
+          label = btn.querySelector('.name').textContent;
+        } else {
+          price = Number(btn.dataset.price);
+          label = btn.querySelector('.name').textContent;
+        }
+        state.plans.push({ price, key, label });
         btn.classList.add('active');
         if(key === 'partial'){
           partialPlanInputWrap.style.display = 'block';
@@ -577,6 +631,37 @@
     });
   });
 
+  // アライナー本体ボタン：パッケージ選択エリアの開閉のみを担当する（それ自体はプランを追加しない）
+  alignerPlanBtn.addEventListener('click', () => {
+    const isOpen = alignerPackageWrap.style.display !== 'none';
+    if(isOpen){
+      const removingCount = alignerPlanKeys().length;
+      // 全パッケージを外すと0件になってしまう場合は解除させない
+      if(state.plans.length - removingCount < 1) return;
+      state.plans = state.plans.filter(p => !p.key.startsWith('aligner-'));
+      alignerPackageButtons.forEach(b => b.classList.remove('active'));
+      alignerPackageWrap.style.display = 'none';
+      alignerPlanBtn.classList.remove('active');
+    } else {
+      alignerPackageWrap.style.display = 'block';
+      // まだ何もパッケージが選ばれていなければ、コンプリヘンシブを既定で追加する
+      if(alignerPlanKeys().length === 0){
+        const defaultBtn = document.querySelector('#alignerPackageOptions .opt[data-pkg="comprehensive"]');
+        const pkg = ALIGNER_PACKAGES.comprehensive;
+        state.plans.push({
+          price: pkg.price,
+          key: 'aligner-comprehensive',
+          label: `アライナー（マウスピース）・${pkg.label}`,
+          note: pkg.note
+        });
+        defaultBtn.classList.add('active');
+      }
+      alignerPlanBtn.classList.add('active');
+    }
+    syncCashOnlyDiscounts();
+    render();
+  });
+
   partialPlanInput.addEventListener('input', () => {
     const price = Math.max(0, Number(partialPlanInput.value) || 0);
     const idx = state.plans.findIndex(p => p.key === 'partial');
@@ -585,6 +670,34 @@
       render();
     }
   });
+
+  // アライナーのパッケージ選択（複数選択可・比較表示。選んだパッケージの数だけ結果カードが並ぶ）
+  alignerPackageButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pkgKey = btn.dataset.pkg;
+      const key = `aligner-${pkgKey}`;
+      const isActive = btn.classList.contains('active');
+      if(isActive){
+        // プラン全体が0件になってしまう場合は解除させない
+        if(state.plans.length === 1) return;
+        state.plans = state.plans.filter(p => p.key !== key);
+        btn.classList.remove('active');
+      } else {
+        const pkg = ALIGNER_PACKAGES[pkgKey];
+        state.plans.push({
+          price: pkg.price,
+          key: key,
+          label: `アライナー（マウスピース）・${pkg.label}`,
+          note: pkg.note
+        });
+        btn.classList.add('active');
+      }
+      syncAlignerMainButtonState();
+      syncCashOnlyDiscounts();
+      render();
+    });
+  });
+
 
   // ---------- Difficulty option (single-select) ----------
   document.querySelectorAll('#difficultyOptions .opt').forEach(btn => {
@@ -748,9 +861,11 @@
   // 部分矯正（key === 'partial'）には特典・割引・難症例オプションのいずれも適用しない。
   function computePlan(plan){
     const isPartial = plan.key === 'partial';
+    // アライナーのモデレート・ライトパッケージは難症例オプションの対象外
+    const isDiffExcluded = isPartial || plan.key === 'aligner-moderate' || plan.key === 'aligner-light';
     const appliedDiscountExam = isPartial ? 0 : state.discountExam;
     const appliedDiscountContract = isPartial ? 0 : state.discountContract;
-    const appliedDiff = isPartial ? 0 : state.diff;
+    const appliedDiff = isDiffExcluded ? 0 : state.diff;
 
     const examInc = Math.max(0, DIAGNOSTIC_FEE - appliedDiscountExam);
     const contractInc = Math.max(0, plan.price + appliedDiff - appliedDiscountContract);
@@ -766,6 +881,7 @@
     return {
       planPrice: plan.price,
       isPartial,
+      isDiffExcluded,
       appliedDiscountExam,
       appliedDiscountContract,
       appliedDiff,
@@ -845,6 +961,7 @@
           <div class="monthly">${yen(c.m)}<small> /月</small></div>
           `}
           <span class="method-chip">${methodLabels[state.method](c.n)}</span>
+          ${plan.note ? `<p class="rate-note" style="margin:8px 0 0;">${plan.note}</p>` : ''}
 
           <div class="divider"></div>
 
@@ -855,7 +972,7 @@
           <div class="stat-row"><span class="k">難症例オプション</span><span class="v">対象外（部分矯正）</span></div>
           <div class="stat-row"><span class="k">特典</span><span class="v">対象外（部分矯正）</span></div>
           ` : `
-          <div class="stat-row"><span class="k">難症例オプション</span><span class="v">${yen(c.appliedDiff)}</span></div>
+          <div class="stat-row"><span class="k">難症例オプション</span><span class="v">${c.isDiffExcluded ? '対象外（' + plan.label.split('・')[1] + '）' : yen(c.appliedDiff)}</span></div>
           <div class="stat-row discount"><span class="k">特典（検査時）</span><span class="v">−${yen(c.appliedDiscountExam)}</span></div>
           <div class="stat-row discount"><span class="k">特典（契約時）</span><span class="v">−${yen(c.appliedDiscountContract)}</span></div>
           `}
