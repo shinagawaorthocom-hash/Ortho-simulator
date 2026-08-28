@@ -175,12 +175,15 @@
     letter-spacing:.04em;
     color:var(--ink-soft);
     text-transform:uppercase;
-    display:flex; justify-content:space-between; align-items:center;
+    line-height:1.5;
   }
   .result-card .plan-title span{
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
+    display:block;
+  }
+  .result-card .plan-title .plan-title-sub{
+    color:var(--ink);
+    font-weight:700;
+    margin-top:2px;
   }
   .result-label{
     font-family:var(--mono);
@@ -251,8 +254,12 @@
   .breakdown-plan-title{
     font-weight:700; font-size:13px; color:var(--ink);
     margin-bottom:10px;
-    min-height:40px;
+    min-height:58px;
     line-height:1.4;
+  }
+  .breakdown-plan-title .pkg-sub{
+    display:block;
+    margin-top:1px;
   }
   .breakdown-plan-title .sub{
     display:block;
@@ -928,10 +935,11 @@
         `<tr class="${item.adjusted ? 'adjusted' : ''}"><td>${idx + 1}回目</td><td>${yen(item.amount)}</td></tr>`
       ).join('');
 
+      const [breakdownLabelMain, breakdownLabelSub] = plan.label.split('・');
       return `
         <div class="breakdown-plan">
           <div class="breakdown-plan-title">
-            ${plan.label}
+            ${breakdownLabelMain}${breakdownLabelSub ? `<span class="pkg-sub">${breakdownLabelSub}</span>` : ''}
             <span class="sub">分割対象額（契約時・税込）${yen(c.contractInc)}</span>
           </div>
           <div class="breakdown-col">
@@ -946,10 +954,12 @@
   function render(){
     resultCards.innerHTML = sortedPlans().map(plan => {
       const c = computePlan(plan);
+      const [labelMain, labelSub] = plan.label.split('・');
       return `
         <div class="result-card">
           <div class="plan-title">
-            <span>${plan.label}</span>
+            <span>${labelMain}</span>
+            ${labelSub ? `<span class="plan-title-sub">${labelSub}</span>` : ''}
           </div>
           ${state.method === 'cash' ? `
           <div class="result-label">総額</div>
