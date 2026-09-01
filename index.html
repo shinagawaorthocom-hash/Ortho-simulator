@@ -483,6 +483,14 @@
             <button class="opt count active" data-count="12"><span class="name">12回</span></button>
             <button class="opt count" data-count="24"><span class="name">24回</span></button>
           </div>
+          <p class="rate-note" style="margin-top:6px;">両方選択すると12回・24回を並べて比較できます。</p>
+        </div>
+
+        <div id="downPaymentBlock" style="display:none; margin-top:14px;">
+          <h3 style="margin-bottom:8px;">頭金（任意）</h3>
+          <input type="number" id="downPaymentInput" min="0" step="1000" placeholder="例：100000"
+            style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; font-family:var(--mono); font-size:14px; color:var(--ink);">
+          <p class="rate-note" style="margin-top:6px;">入力した金額を契約時にお支払いいただき、残額を分割回数でお支払いいただきます（未入力の場合は頭金なし）。</p>
         </div>
 
         <div id="loanCountBlock" style="display:none; margin-top:14px;">
@@ -543,7 +551,8 @@
     discountContract: 0,
     method: 'cash',
     rate: 0,
-    count: 1
+    count: 1,
+    downPayment: 0
   };
 
   const DIAGNOSTIC_FEE = 55000; // 税込
@@ -794,6 +803,8 @@
 
   // ---------- Payment method ----------
   const countBlock = document.getElementById('countBlock');
+  const downPaymentBlock = document.getElementById('downPaymentBlock');
+  const downPaymentInput = document.getElementById('downPaymentInput');
   const loanCountBlock = document.getElementById('loanCountBlock');
   const loanCountInput = document.getElementById('loanCountInput');
   const loanCountHint = document.getElementById('loanCountHint');
@@ -821,6 +832,11 @@
         state.count = Number(btn.dataset.count);
       }
       countBlock.style.display = state.method === 'inhouse' ? 'block' : 'none';
+      downPaymentBlock.style.display = state.method === 'inhouse' ? 'block' : 'none';
+      if(state.method !== 'inhouse'){
+        state.downPayment = 0;
+        downPaymentInput.value = '';
+      }
       methodTimingNote.textContent = timingNotes[state.method];
 
       const isLoan = state.method === 'loan-suruga' || state.method === 'loan-epos';
@@ -846,12 +862,49 @@
 
   document.querySelectorAll('#countBlock .opt').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#countBlock .opt').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.count = Number(btn.dataset.count);
+      const isActive = btn.classList.contains('active');
+      const activeCount = document.querySelectorAll('#countBlock .opt.active').length;
+      if(isActive){
+        // 最低1つは選択されている状態を保つ
+        if(activeCount === 1) return;
+        btn.classList.remove('active');
+      } else {
+        btn.classList.add('active');
+      }
       render();
     });
   });
+
+  downPaymentInput.addEventListener('input', () => {
+    state.downPayment = Math.max(0, Number(downPaymentInput.value) || 0);
+    render();
+  });
+
+  function activeCounts(){
+    const counts = Array.from(document.querySelectorAll('#countBlock .opt.active'))
+      .map(b => Number(b.dataset.count))
+      .sort((a, b) => a - b);
+    return counts.length ? counts : [12];
+  }
+
+  // 支払い方法・分割回数ごとに描画対象のプランを組み立てる。
+  // 院内分割で12回・24回の両方が選択されている場合は、プランごとに12回版・24回版の
+  // 両方のカードを並べて比較できるようにする。
+  function planInstances(){
+    const plans = sortedPlans();
+    if(state.method === 'inhouse'){
+      const counts = activeCounts();
+      const combos = [];
+      for(const plan of plans){
+        for(const n of counts){
+          combos.push({ plan, n });
+        }
+      }
+      return combos;
+    }
+    const n = state.method === 'cash' ? 1 : state.count;
+    return plans.map(plan => ({ plan, n }));
+  }
 
   loanCountInput.addEventListener('input', () => {
     const max = loanMaxCounts[state.method] || 999;
@@ -866,7 +919,7 @@
   // 検査診断費は特典の「検査時」割引のみを適用し、支払い方法にかかわらず据置・別払い。
   // 治療プラン＋難症例オプションは特典の「契約時」割引を適用したうえで、選択した支払い方法・回数で分割する。
   // 部分矯正（key === 'partial'）には特典・割引・難症例オプションのいずれも適用しない。
-  function computePlan(plan){
+  function computePlan(plan, nOverride){
     const isPartial = plan.key === 'partial';
     // アライナーのモデレート・ライトパッケージは難症例オプションの対象外
     const isDiffExcluded = isPartial || plan.key === 'aligner-moderate' || plan.key === 'aligner-light';
@@ -877,9 +930,15 @@
     const examInc = Math.max(0, DIAGNOSTIC_FEE - appliedDiscountExam);
     const contractInc = Math.max(0, plan.price + appliedDiff - appliedDiscountContract);
 
-    const n = state.method === 'cash' ? 1 : state.count;
-    const m = monthlyPayment(contractInc, state.rate, n);
-    const contractGrand = state.method === 'cash' ? contractInc : m * n;
+    // 院内分割の場合のみ、任意で入力された頭金を契約時に一括でお支払いいただき、
+    // 残額（分割対象額）を選択中の回数で分割する。部分矯正には頭金を適用しない。
+    const isInhouse = state.method === 'inhouse';
+    const downPayment = (isInhouse && !isPartial) ? Math.min(state.downPayment, contractInc) : 0;
+    const splitPrincipal = Math.max(0, contractInc - downPayment);
+
+    const n = nOverride != null ? nOverride : (state.method === 'cash' ? 1 : state.count);
+    const m = monthlyPayment(splitPrincipal, state.rate, n);
+    const contractGrand = state.method === 'cash' ? contractInc : (downPayment + m * n);
     const interest = Math.max(0, contractGrand - contractInc);
 
     const subInc = examInc + contractInc;
@@ -894,6 +953,8 @@
       appliedDiff,
       examInc,
       contractInc,
+      downPayment,
+      splitPrincipal,
       subInc,
       n, m, grand, interest
     };
@@ -928,9 +989,9 @@
     }
     card.style.display = 'block';
 
-    body.innerHTML = sortedPlans().map(plan => {
-      const c = computePlan(plan);
-      const list = buildInstallments(c.contractInc, state.count);
+    body.innerHTML = planInstances().map(({ plan, n }) => {
+      const c = computePlan(plan, n);
+      const list = buildInstallments(c.splitPrincipal, n);
       const rows = list.map((item, idx) =>
         `<tr class="${item.adjusted ? 'adjusted' : ''}"><td>${idx + 1}回目</td><td>${yen(item.amount)}</td></tr>`
       ).join('');
@@ -940,10 +1001,10 @@
         <div class="breakdown-plan">
           <div class="breakdown-plan-title">
             ${breakdownLabelMain}${breakdownLabelSub ? `<span class="pkg-sub">${breakdownLabelSub}</span>` : ''}
-            <span class="sub">分割対象額（契約時・税込）${yen(c.contractInc)}</span>
+            <span class="sub">分割対象額（契約時・税込）${yen(c.splitPrincipal)}${c.downPayment > 0 ? `・頭金${yen(c.downPayment)}差引後` : ''}</span>
           </div>
           <div class="breakdown-col">
-            <h4>${state.count}回払い</h4>
+            <h4>${n}回払い</h4>
             <div class="breakdown-list"><table class="breakdown-table"><tbody>${rows}</tbody></table></div>
           </div>
         </div>`;
@@ -952,8 +1013,8 @@
   const resultCards = document.getElementById('resultCards');
 
   function render(){
-    resultCards.innerHTML = sortedPlans().map(plan => {
-      const c = computePlan(plan);
+    resultCards.innerHTML = planInstances().map(({ plan, n }) => {
+      const c = computePlan(plan, n);
       const [labelMain, labelSub] = plan.label.split('・');
       return `
         <div class="result-card">
@@ -994,7 +1055,12 @@
           <div class="divider"></div>
 
           <div class="stat-row"><span class="k">検査時のお支払い（税込・別途）</span><span class="v">${yen(c.examInc)}</span></div>
+          ${c.downPayment > 0 ? `
+          <div class="stat-row"><span class="k">頭金（契約時・税込）</span><span class="v">${yen(c.downPayment)}</span></div>
+          <div class="stat-row"><span class="k">分割対象額（税込）</span><span class="v">${yen(c.splitPrincipal)}</span></div>
+          ` : `
           <div class="stat-row"><span class="k">契約時のお支払い対象額（税込）</span><span class="v">${yen(c.contractInc)}</span></div>
+          `}
 
           <div class="divider"></div>
 
