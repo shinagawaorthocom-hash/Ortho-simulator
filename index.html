@@ -421,7 +421,7 @@
       </div>
 
       <div class="card">
-        <h3>難症例オプション <span class="hint">（1つのみ選択）</span></h3>
+        <h3>難症例オプション <span class="hint">（複数選択可・比較表示）</span></h3>
         <div class="option-grid" id="difficultyOptions">
           <button class="opt diff active" data-price="0">
             <span class="name">なし</span>
@@ -545,7 +545,6 @@
 (function(){
   const state = {
     plans: [{ price: 935000, key: 'labial', label: 'ラビアル（表側矯正）' }],
-    diff: 0,
     discount: 0,
     discountExam: 0,
     discountContract: 0,
@@ -715,15 +714,31 @@
   });
 
 
-  // ---------- Difficulty option (single-select) ----------
+  // ---------- Difficulty option (multi-select, at least 1 required) ----------
+  // 難症例1・2などを同時に選択すると、プランごとにオプション別の見積もりカードを並べて比較できる。
   document.querySelectorAll('#difficultyOptions .opt').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#difficultyOptions .opt').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.diff = Number(btn.dataset.price);
+      const isActive = btn.classList.contains('active');
+      const activeCount = document.querySelectorAll('#difficultyOptions .opt.active').length;
+      if(isActive){
+        // 最低1つは選択されている状態を保つ
+        if(activeCount === 1) return;
+        btn.classList.remove('active');
+      } else {
+        btn.classList.add('active');
+      }
       render();
     });
   });
+
+  function activeDiffs(){
+    const btns = Array.from(document.querySelectorAll('#difficultyOptions .opt.active'));
+    const diffs = btns.map(b => ({
+      price: Number(b.dataset.price),
+      label: b.querySelector('.name').textContent
+    }));
+    return diffs.length ? diffs : [{ price: 0, label: 'なし' }];
+  }
 
   // ---------- Discount options (multi-select, with cash-only auto-apply) ----------
   const discountB = document.getElementById('discountB');
@@ -890,20 +905,32 @@
   // 支払い方法・分割回数ごとに描画対象のプランを組み立てる。
   // 院内分割で12回・24回の両方が選択されている場合は、プランごとに12回版・24回版の
   // 両方のカードを並べて比較できるようにする。
+  function isDiffExcludedPlan(plan){
+    // 部分矯正・アライナーのモデレート/ライトパッケージは難症例オプションの対象外
+    return plan.key === 'partial' || plan.key === 'aligner-moderate' || plan.key === 'aligner-light';
+  }
+
   function planInstances(){
     const plans = sortedPlans();
-    if(state.method === 'inhouse'){
-      const counts = activeCounts();
-      const combos = [];
-      for(const plan of plans){
-        for(const n of counts){
-          combos.push({ plan, n });
+    const diffs = activeDiffs();
+    const counts = state.method === 'inhouse' ? activeCounts() : null;
+
+    const combos = [];
+    for(const plan of plans){
+      // 対象外プランは難症例オプションを変えても金額が変わらないため、カードを重複させない
+      const planDiffs = isDiffExcludedPlan(plan) ? [diffs[0]] : diffs;
+      for(const diff of planDiffs){
+        if(counts){
+          for(const n of counts){
+            combos.push({ plan, diff, n });
+          }
+        } else {
+          const n = state.method === 'cash' ? 1 : state.count;
+          combos.push({ plan, diff, n });
         }
       }
-      return combos;
     }
-    const n = state.method === 'cash' ? 1 : state.count;
-    return plans.map(plan => ({ plan, n }));
+    return combos;
   }
 
   loanCountInput.addEventListener('input', () => {
@@ -919,13 +946,12 @@
   // 検査診断費は特典の「検査時」割引のみを適用し、支払い方法にかかわらず据置・別払い。
   // 治療プラン＋難症例オプションは特典の「契約時」割引を適用したうえで、選択した支払い方法・回数で分割する。
   // 部分矯正（key === 'partial'）には特典・割引・難症例オプションのいずれも適用しない。
-  function computePlan(plan, nOverride){
+  function computePlan(plan, diff, nOverride){
     const isPartial = plan.key === 'partial';
-    // アライナーのモデレート・ライトパッケージは難症例オプションの対象外
-    const isDiffExcluded = isPartial || plan.key === 'aligner-moderate' || plan.key === 'aligner-light';
+    const isDiffExcluded = isDiffExcludedPlan(plan);
     const appliedDiscountExam = isPartial ? 0 : state.discountExam;
     const appliedDiscountContract = isPartial ? 0 : state.discountContract;
-    const appliedDiff = isDiffExcluded ? 0 : state.diff;
+    const appliedDiff = isDiffExcluded ? 0 : diff.price;
 
     const examInc = Math.max(0, DIAGNOSTIC_FEE - appliedDiscountExam);
     const contractInc = Math.max(0, plan.price + appliedDiff - appliedDiscountContract);
@@ -989,19 +1015,20 @@
     }
     card.style.display = 'block';
 
-    body.innerHTML = planInstances().map(({ plan, n }) => {
-      const c = computePlan(plan, n);
+    body.innerHTML = planInstances().map(({ plan, diff, n }) => {
+      const c = computePlan(plan, diff, n);
       const list = buildInstallments(c.splitPrincipal, n);
       const rows = list.map((item, idx) =>
         `<tr class="${item.adjusted ? 'adjusted' : ''}"><td>${idx + 1}回目</td><td>${yen(item.amount)}</td></tr>`
       ).join('');
 
       const [breakdownLabelMain, breakdownLabelSub] = plan.label.split('・');
+      const diffPrefix = !c.isDiffExcluded ? `${diff.label}・` : '';
       return `
         <div class="breakdown-plan">
           <div class="breakdown-plan-title">
             ${breakdownLabelMain}${breakdownLabelSub ? `<span class="pkg-sub">${breakdownLabelSub}</span>` : ''}
-            <span class="sub">分割対象額（契約時・税込）${yen(c.splitPrincipal)}${c.downPayment > 0 ? `・頭金${yen(c.downPayment)}差引後` : ''}</span>
+            <span class="sub">${diffPrefix}分割対象額（契約時・税込）${yen(c.splitPrincipal)}${c.downPayment > 0 ? `・頭金${yen(c.downPayment)}差引後` : ''}</span>
           </div>
           <div class="breakdown-col">
             <h4>${n}回払い</h4>
@@ -1013,8 +1040,8 @@
   const resultCards = document.getElementById('resultCards');
 
   function render(){
-    resultCards.innerHTML = planInstances().map(({ plan, n }) => {
-      const c = computePlan(plan, n);
+    resultCards.innerHTML = planInstances().map(({ plan, diff, n }) => {
+      const c = computePlan(plan, diff, n);
       const [labelMain, labelSub] = plan.label.split('・');
       return `
         <div class="result-card">
@@ -1022,6 +1049,7 @@
             <span>${labelMain}</span>
             ${labelSub ? `<span class="plan-title-sub">${labelSub}</span>` : ''}
           </div>
+          ${!c.isDiffExcluded ? `<span class="method-chip" style="margin-top:8px; border-color:var(--gold); color:var(--teal-deep);">難症例オプション：${diff.label}</span>` : ''}
           ${state.method === 'cash' ? `
           <div class="result-label">総額</div>
           <div class="monthly">${yen(c.grand)}</div>
